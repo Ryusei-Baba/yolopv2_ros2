@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>yolopv2_ros2</name>
+  <version>0.0.1</version> <!-- バージョン番号を適切に設定 -->
+  <description>ROS 2 package for YOLOPv2 object detection and BEV transformation.</description> <!-- より具体的な説明 -->
+  <maintainer email="s20c1102kg@s.chibakoudai.jp">Ryusei Baba</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>opencv2</depend> <!-- opencv2の依存関係を追加 -->
+  <depend>python3-opencv</depend>
+  <depend>torch</depend>  <!-- PyTorchの依存関係を追加 -->
+  <depend>torchvision</depend> <!-- torchvisionの依存関係を追加 -->
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>pytest</test_depend> <!-- python3-pytest は pytest で十分 -->
+
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
