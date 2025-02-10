@@ -31,9 +31,9 @@ class Yolopv2InferenceNode(Node):
         self.logger.info(f"Using device: {DEVICE}")
 
         self.subscription = self.create_subscription(Image, '/zed/zed_node/rgb/image_rect_color', self.image_callback, 10)
-        self.publisher = self.create_publisher(Image, '/yolopv2/inference_image', 10)
-        self.da_seg_publisher = self.create_publisher(Image, '/yolopv2/da_seg_mask', 10)
-        self.ll_seg_publisher = self.create_publisher(Image, '/yolopv2/ll_seg_mask', 10)
+        self.publisher = self.create_publisher(Image, '/yolopv2/image/inference', 10)
+        self.da_seg_publisher = self.create_publisher(Image, '/yolopv2/image/da_seg_mask', 10)
+        self.ll_seg_publisher = self.create_publisher(Image, '/yolopv2/image/ll_seg_mask', 10)
         self.bridge = CvBridge()
 
         # モデルパス

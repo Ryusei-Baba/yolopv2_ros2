@@ -23,7 +23,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'yolopv2_inference_node = yolopv2_ros2.yolopv2_inference_node:main'
+            'yolopv2_inference_node = yolopv2_ros2.yolopv2_inference_node:main',
+            'bird_eye_view_node = yolopv2_ros2.bird_eye_view_node:main',
         ],
     },
 )
