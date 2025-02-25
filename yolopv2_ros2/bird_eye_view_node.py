@@ -1,73 +1,113 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, PointCloud2
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
+from std_msgs.msg import Header
+import sensor_msgs_py.point_cloud2 as pc2
+from geometry_msgs.msg import PoseStamped
+
 
 class BirdEyeViewNode(Node):
     def __init__(self):
         super().__init__('bird_eye_view_node')
 
-        # CvBridgeのインスタンス
         self.bridge = CvBridge()
-
-        # 画像をサブスクライブ
-        self.subscription_da = self.create_subscription(Image, '/yolopv2/image/da_seg_mask', self.da_callback, 10)
         self.subscription_ll = self.create_subscription(Image, '/yolopv2/image/ll_seg_mask', self.ll_callback, 10)
+        self.publisher_bev = self.create_publisher(PointCloud2, '/yolopv2/pointcloud2/bird_eye_view', 10)
+        self.publisher_pose = self.create_publisher(PoseStamped, '/pose', 10)  # ★Poseのパブリッシャー追加★
 
-        # 俯瞰図のパブリッシャー
-        self.publisher_bev = self.create_publisher(Image, '/yolopv2/image/bird_eye_view', 10)
+        # 画像 → ロボット座標系変換のパラメータ
+        self.src_pts = np.float32([[100, 180], [380, 180], [-480, 300], [960, 300]])
+        self.dst_pts = np.float32([[3.0, 2.5], [3.0, -2.5], [-1.5, 2.5], [-1.5, -2.5]])
+        self.M = cv2.getPerspectiveTransform(self.src_pts, self.dst_pts)
 
-        # 画像データのバッファ
-        self.da_image = None
-        self.ll_image = None
+        self.get_logger().info('BirdEyeViewNode initialized.')
 
-    def da_callback(self, msg):
-        self.da_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        self.process_and_publish()
+        # タイマーで定期的にPoseを送信
+        self.timer = self.create_timer(0.1, self.publish_pose)  # 0.1秒ごとに実行
+
+        # 仮のロボット位置（テスト用）
+        self.robot_x = 0.0
+        self.robot_y = 0.0
+        self.robot_yaw = 0.0
+
+        self.get_logger().info('BirdEyeViewNode initialized.')
 
     def ll_callback(self, msg):
-        self.ll_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        self.process_and_publish()
+        self.get_logger().debug('Received image message.')
+        ll_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
-    def process_and_publish(self):
-        if self.da_image is None or self.ll_image is None:
-            return  # どちらかの画像がまだ受信されていない場合は処理しない
+        # **赤色の抽出**
+        red_channel = ll_image[:, :, 2]
+        _, binary_mask = cv2.threshold(red_channel, 150, 255, cv2.THRESH_BINARY)
 
-        # 画像サイズを取得
-        height, width = self.da_image.shape[:2]
+        # **赤いピクセルの座標取得**
+        points = cv2.findNonZero(binary_mask)
+        if points is None:
+            self.get_logger().warn('No red regions detected. Skipping processing.')
+            return
 
-        # 画像を統合
-        combined_image = cv2.addWeighted(self.da_image, 0.5, self.ll_image, 0.5, 0)
+        points = points.reshape(-1, 2)
+
+        # **ピクセル座標をロボット座標系に変換**
+        pixel_coords = np.hstack([points, np.ones((points.shape[0], 1), dtype=np.float32)])
+        transformed = cv2.perspectiveTransform(pixel_coords[:, :2].reshape(-1, 1, 2), self.M)
+
+        # **PointCloud2 フィルタ処理**
+        transformed_dict = {}
+
+        for p in transformed:
+            x, y = p[0][0], p[0][1]
+            x = round(x)  # ★ x を整数に変換（四捨五入）
+
+            if x not in transformed_dict:
+                transformed_dict[x] = {'pos': None, 'neg': None}
+
+            # **y >= 0 の場合、y が最も 0 に近いものを保存**
+            if y >= 0:
+                if transformed_dict[x]['pos'] is None or abs(y) < abs(transformed_dict[x]['pos'][1]):
+                    transformed_dict[x]['pos'] = (x, y, 0.0)
+
+            # **y < 0 の場合、y が最も 0 に近いものを保存**
+            else:
+                if transformed_dict[x]['neg'] is None or abs(y) < abs(transformed_dict[x]['neg'][1]):
+                    transformed_dict[x]['neg'] = (x, y, 0.0)
+
+        # **フィルタされたポイントをリスト化**
+        filtered_points = []
+        for x in transformed_dict:
+            if transformed_dict[x]['pos']:  # y > 0 の代表点
+                filtered_points.append(transformed_dict[x]['pos'])
+            if transformed_dict[x]['neg']:  # y < 0 の代表点
+                filtered_points.append(transformed_dict[x]['neg'])
 
 
-        # 俯瞰変換前の座標 (元の画像上の4点)
-        src_pts = np.float32([
-            [0, height*0.7],               # 左下
-            [width * 0.3, height * 0.6],   # 左上
-            [width * 0.7, height * 0.6],   # 右上
-            [width, height*0.7]            # 右下
-        ])
+        # **PointCloud2 メッセージ作成**
+        header = Header()
+        header.stamp = self.get_clock().now().to_msg()
+        header.frame_id = "map"
 
-        # 俯瞰変換後の座標 (出力画像上の4点)
-        dst_pts = np.float32([
-            [width*0.4, height],   # 俯瞰後の左下
-            [width * 0.4, 0],      # 俯瞰後の左上
-            [width * 0.6, 0],      # 俯瞰後の右上
-            [width*0.6, height]    # 俯瞰後の右下
-        ])
+        cloud_msg = pc2.create_cloud_xyz32(header, filtered_points)
 
+        # **パブリッシュ**
+        self.publisher_bev.publish(cloud_msg)
+        self.get_logger().info(f'Published filtered PointCloud2 with {len(filtered_points)} points.')
 
-        M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+    def publish_pose(self):
+        """ 仮のPoseをパブリッシュ """
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_msg.header.frame_id = "map"
+        pose_msg.pose.position.x = self.robot_x
+        pose_msg.pose.position.y = self.robot_y
+        pose_msg.pose.position.z = 0.0
+        pose_msg.pose.orientation.w = 1.0  # 向きを仮に設定
 
-        # 俯瞰変換を適用
-        bev_image = cv2.warpPerspective(combined_image, M, (width, height))
+        self.publisher_pose.publish(pose_msg)
+        self.get_logger().info(f'Published Pose: x={self.robot_x}, y={self.robot_y}')
 
-        # 変換した画像をパブリッシュ
-        bev_msg = self.bridge.cv2_to_imgmsg(bev_image, encoding='bgr8')
-        self.publisher_bev.publish(bev_msg)
-        self.get_logger().info('Published Bird Eye View Image')
 
 def main(args=None):
     rclpy.init(args=args)

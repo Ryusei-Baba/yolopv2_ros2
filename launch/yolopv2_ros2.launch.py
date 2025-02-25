@@ -17,5 +17,21 @@ def generate_launch_description():
             executable='bird_eye_view_node',
             name='bird_eye_view',
             output='screen'
+        ),
+
+        # パスパブリッシャーノード
+        launch_ros.actions.Node(
+            package='yolopv2_ros2',
+            executable='path_publisher_node',
+            name='path_publisher',
+            output='screen'
+        ),
+
+        # パス追従ノード
+        launch_ros.actions.Node(
+            package='yolopv2_ros2',
+            executable='follow_node',
+            name='follow_node',
+            output='screen'
         )
     ])

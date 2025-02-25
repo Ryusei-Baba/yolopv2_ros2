@@ -25,6 +25,8 @@ setup(
         'console_scripts': [
             'yolopv2_inference_node = yolopv2_ros2.yolopv2_inference_node:main',
             'bird_eye_view_node = yolopv2_ros2.bird_eye_view_node:main',
+            'path_publisher_node = yolopv2_ros2.path_publisher_node:main',
+            'follow_node = yolopv2_ros2.follow_node:main',
         ],
     },
 )
