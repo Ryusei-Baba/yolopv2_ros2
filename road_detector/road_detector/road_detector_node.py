@@ -20,9 +20,9 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 CONF_THRES = 0.3
 IOU_THRES = 0.45
 
-class Yolopv2InferenceNode(Node):
+class RoadDetectorNode(Node):
     def __init__(self, context=None):
-        super().__init__('yolopv2_inference_node', context=context)
+        super().__init__('road_detector_node', context=context)
         self.logger = self.get_logger()
 
         self.logger.info(f"Using device: {DEVICE}")
@@ -34,7 +34,7 @@ class Yolopv2InferenceNode(Node):
         self.bridge = CvBridge()
 
         # モデルパス
-        package_share_directory = get_package_share_directory('yolopv2_ros2')
+        package_share_directory = get_package_share_directory('road_detector')
         model_path = os.path.join(package_share_directory, 'data', 'weights', 'yolopv2.pt')
 
         # モデルのロード
@@ -97,7 +97,7 @@ class Yolopv2InferenceNode(Node):
             ll_seg_msg.header.stamp = self.get_clock().now().to_msg()
             self.ll_seg_publisher.publish(ll_seg_msg)
 
-            self.logger.info(f"Published lane line mask. Using device: {DEVICE}")
+            # self.logger.info(f"Published lane line mask. Using device: {DEVICE}")
         except Exception as e:
             self.logger.error(f"Failed to publish results: {e}")
 
@@ -121,9 +121,9 @@ class Yolopv2InferenceNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    yolopv2_inference_node = Yolopv2InferenceNode()
-    rclpy.spin(yolopv2_inference_node)
-    yolopv2_inference_node.destroy_node()
+    road_detector_node = RoadDetectorNode()
+    rclpy.spin(road_detector_node)
+    road_detector_node.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
